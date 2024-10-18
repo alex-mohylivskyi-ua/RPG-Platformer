@@ -5,15 +5,12 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 
-public class PlayerController : MonoBehaviour
+public class PlayerController : Entity
 {
     private DefaultPlayerActions defaultPlayerActions;
-    [SerializeField] float jumpForce, moveSpeed;
-    private Rigidbody2D rb;
+    
     float xInput, yInput;
-    private Animator anim;
-    private bool isGrounded;
-    private float velocity;
+    
 
     [Header("Attack info")]
     private bool isAttacking;
@@ -28,47 +25,45 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float dashCooldownTime;
     [SerializeField] float dashSpeed;
 
-    [Header("Collision info")]
-    private LayerMask groundLayerMask;
-    [SerializeField] float groundCheckDistance;
+    
+    
 
     private float dashTimer;
     private float dashCooldownTimer;
 
     // private InputAction moveAction;
     // private Vector2 moveDir;
-    
-    void Awake()
-    {
-        defaultPlayerActions = new DefaultPlayerActions();
-        groundLayerMask = LayerMask.GetMask("Ground");
-        rb = GetComponent<Rigidbody2D>();
-        anim = GetComponentInChildren<Animator>();
-        // comboTime = comboTimer;
-        // moveAction = defaultPlayerActions.Player.Move;
-    }
+
+
+
     // Start is called before the first frame update
-    void Start()
+    protected override void Start()
     {
-        
+        base.Start();
     }
 
-    // Update is called once per frame
-    void Update()
+    protected override void Awake()
     {
+        base.Awake();
+        defaultPlayerActions = new DefaultPlayerActions();
+    }
+
+
+    
+
+    // Update is called once per frame
+    protected override void Update()
+    {
+        base.Update();
         Move();
         Flip();
         AnimatorControllers();
-        CollisionChecks();
+        
         Timers();
     }
 
     
-    private void CollisionChecks()
-    {   
-        // isGrounded = Physics2D.Raycast(groundCheckPoint.position, Vector2.down, 0.5f);
-        isGrounded = Physics2D.Raycast(transform.position, Vector2.down, groundCheckDistance, groundLayerMask);
-    }
+    
 
     private void CheckInput()
     {
@@ -163,21 +158,7 @@ public class PlayerController : MonoBehaviour
         anim.SetInteger("comboCounter", comboCounter);
     }
 
-    private void Flip()
-    {
-        // Update player animation
-        if (rb.velocity.x < 0) {
-            transform.localScale = new Vector3(-1f, 1f, 1f);
-        } else if (rb.velocity.x > 0) {
-            transform.localScale = new Vector3(1f, 1f, 1f);
-        }
-    }
-
-    // It's unity function
-    private void OnDrawGizmos()
-    {
-        Gizmos.DrawLine(transform.position, new Vector3(transform.position.x, transform.position.y - groundCheckDistance));
-    }
+    
 
     private void Timers()
     {
