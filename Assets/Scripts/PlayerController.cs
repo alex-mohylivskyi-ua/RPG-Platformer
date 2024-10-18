@@ -3,18 +3,25 @@ using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
 public class PlayerController : MonoBehaviour
 {
+    private DefaultPlayerActions defaultPlayerActions;
     [SerializeField] float jumpForce, moveSpeed;
     private Rigidbody2D rb;
     float xInput, yInput;
     private Animator anim;
     private bool isGrounded;
+    private float velocity;
 
     [Header("Attack info")]
     private bool isAttacking;
     private int comboCounter;
+
+    [Header("Combo info")]
+    [SerializeField] float comboTime;
+    private float comboTimer;
 
     [Header("Dash info")]
     [SerializeField] float dashDuration;
@@ -22,64 +29,63 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float dashSpeed;
 
     [Header("Collision info")]
-    [SerializeField] LayerMask whatIsGround;
+    private LayerMask groundLayerMask;
     [SerializeField] float groundCheckDistance;
 
     private float dashTimer;
     private float dashCooldownTimer;
+
+    // private InputAction moveAction;
+    // private Vector2 moveDir;
     
+    void Awake()
+    {
+        defaultPlayerActions = new DefaultPlayerActions();
+        groundLayerMask = LayerMask.GetMask("Ground");
+        rb = GetComponent<Rigidbody2D>();
+        anim = GetComponentInChildren<Animator>();
+        // comboTime = comboTimer;
+        // moveAction = defaultPlayerActions.Player.Move;
+    }
     // Start is called before the first frame update
     void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
-        anim = GetComponentInChildren<Animator>();
+        
     }
 
     // Update is called once per frame
     void Update()
     {
-        CheckInput();
-        Movement();
+        Move();
         Flip();
         AnimatorControllers();
         CollisionChecks();
         Timers();
-        
-        // transform.Translate(new Vector3(xInput, yInput, 0) * moveSpeed * Time.deltaTime);
-        //Get the value of the Horizontal input axis.
     }
 
+    
     private void CollisionChecks()
-    {
-        isGrounded = Physics2D.Raycast(transform.position, Vector2.down, groundCheckDistance, whatIsGround);
+    {   
+        // isGrounded = Physics2D.Raycast(groundCheckPoint.position, Vector2.down, 0.5f);
+        isGrounded = Physics2D.Raycast(transform.position, Vector2.down, groundCheckDistance, groundLayerMask);
     }
 
     private void CheckInput()
     {
         xInput = Input.GetAxisRaw("Horizontal");
         yInput = Input.GetAxisRaw("Vertical");
-
-        // if (Input.GetKeyDown(KeyCode.Space))
-        // {
-        //     Jump();
-        // }
-
-        if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0)
-        {
-            Dash();
-        }
     }
 
-    private void Movement()
+    public void Move()
     {
         if (dashTimer > 0)
         {
             if (xInput == 0)
             {
-                rb.velocity = new Vector2(transform.localScale.x * dashSpeed, rb.velocity.y);
+                rb.velocity = new Vector2(transform.localScale.x * dashSpeed, 0);
             } else
             {
-                rb.velocity = new Vector2(xInput * dashSpeed, rb.velocity.y);
+                rb.velocity = new Vector2(xInput * dashSpeed, 0);
             }
             
         } else 
@@ -88,13 +94,20 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    private void Dash()
+    // EVENTS
+    public void OnMove(InputAction.CallbackContext context)
     {
-        dashCooldownTimer = dashCooldownTime;
-        dashTimer = dashDuration;
+        xInput = context.ReadValue<Vector2>().x;
+        // moveDir = moveAction.ReadValue<Vector2>();
     }
-
-    public void Jump(InputAction.CallbackContext context)
+    public void OnDash(InputAction.CallbackContext context)
+    {
+        if(dashCooldownTimer <= 0 && !isAttacking && context.started)
+        {
+            Dash();
+        }
+    }
+    public void OnJump(InputAction.CallbackContext context)
     {   
         if (context.started && isGrounded)
         {
@@ -107,22 +120,34 @@ public class PlayerController : MonoBehaviour
             Debug.Log("ALOHA");
         }
     }
+    public void OnAttack(InputAction.CallbackContext context)
+    {
+        isAttacking = true;
+        comboTimer = comboTime;
+    }
+    private void OnEnable()
+    {
+        // Enable new system input events
+        defaultPlayerActions.Player.Move.Enable();
+        defaultPlayerActions.Player.Jump.Enable();
+        defaultPlayerActions.Player.Attack.Enable();
+        defaultPlayerActions.Player.Look.Enable();
+    }
+    private void OnDisable()
+    {
+        // Disable new system input events
+        defaultPlayerActions.Player.Move.Disable();
+        defaultPlayerActions.Player.Jump.Disable();
+        defaultPlayerActions.Player.Attack.Disable();
+        defaultPlayerActions.Player.Look.Disable();
+    }
+    // EVENTS END
+    
 
-    public void Jump2(InputAction.CallbackContext context) {
-        if (Time.timeScale != 0)
-        {
-            if (context.started && isGrounded) 
-            {
-                rb.velocity = new Vector2(rb.velocity.x, jumpForce);
-                // AudioManager.instance.PlaySFX(1);
-            }
-
-            // Make small jump
-            if (context.canceled && !isGrounded && rb.velocity.y > 0) 
-            {
-                rb.velocity = new Vector2(rb.velocity.x, rb.velocity.y * .5f);
-            }
-        }
+    private void Dash()
+    {
+        dashCooldownTimer = dashCooldownTime;
+        dashTimer = dashDuration;
     }
 
     private void AnimatorControllers()
@@ -134,6 +159,8 @@ public class PlayerController : MonoBehaviour
         anim.SetBool("isMoving", isMoving);
         anim.SetBool("isGrounded", isGrounded);
         anim.SetBool("isDashing", isDashing);
+        anim.SetBool("isAttacking", isAttacking);
+        anim.SetInteger("comboCounter", comboCounter);
     }
 
     private void Flip()
@@ -163,5 +190,35 @@ public class PlayerController : MonoBehaviour
         {
             dashCooldownTimer -= Time.deltaTime;
         }
+
+        if (comboTimer > 0)
+        {
+            comboTimer -= Time.deltaTime;
+
+            if (comboTimer < 0)
+            {
+                comboCounter = 0;
+            }
+        }
+    }
+
+    public void SetAttackOver()
+    {
+        isAttacking = false;
+
+        comboCounter++;
+
+        if (comboCounter > 2)
+        {
+            comboCounter = 0;
+        }
+
+        // if (comboTimer > 0)
+        // {
+            
+        // } else
+        // {
+        //     comboCounter = 0;
+        // }
     }
 }
